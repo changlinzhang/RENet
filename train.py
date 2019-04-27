@@ -22,21 +22,36 @@ def train(args):
         torch.cuda.set_device(args.gpu)
         torch.cuda.manual_seed_all(999)
 
+    setting_name = '_'.join(
+        ['dropout', str(args.dropout),
+         'em', str(args.n_hidden),
+         'lr', str(args.lr),
+         'norm', str(args.grad_norm),
+         'seq', str(args.seq_len),
+         'bs', str(args.batch_size),
+         'rnn', str(args.rnn_layers),])
+
     os.makedirs('models', exist_ok=True)
     if args.model == 0:
-        model_state_file = 'models/'+args.dataset+'attn.pth'
+        model_state_file = 'models/'+args.dataset+setting_name+'attn.pth'
     elif args.model == 1:
-        model_state_file = 'models/'+args.dataset+'mean.pth'
+        model_state_file = 'models/'+args.dataset+setting_name+'mean.pth'
     elif args.model == 2:
-        model_state_file = 'models/'+args.dataset+'gcn.pth'
+        model_state_file = 'models/'+args.dataset+setting_name+'gcn.pth'
+
+    os.makedirs('./models/' + args.dataset, exist_ok=True)
+    path_name = os.path.join('./models/' + args.dataset, setting_name)
 
     print("start training...")
-    model = RENet(num_nodes,
-                    args.n_hidden,
-                    num_rels,
-                    dropout=args.dropout,
-                    model=args.model,
-                    seq_len=args.seq_len) 
+    if os.path.exists(path_name):
+        model = torch.load(path_name)
+    else:
+        model = RENet(num_nodes,
+                        args.n_hidden,
+                        num_rels,
+                        dropout=args.dropout,
+                        model=args.model,
+                        seq_len=args.seq_len)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.00001)
 
@@ -120,6 +135,7 @@ def train(args):
 
             if mrr > best_mrr:
                 best_mrr = mrr
+                torch.save(model, path_name)
                 torch.save({'state_dict': model.state_dict(), 'epoch': epoch, 
                 's_hist': model.s_hist_test, 's_cache': model.s_his_cache, 
                 'o_hist': model.o_hist_test, 'o_cache': model.o_his_cache, 
@@ -143,7 +159,7 @@ if __name__ == '__main__':
             help="dataset to use")
     parser.add_argument("--grad-norm", type=float, default=1.0,
     help="norm to clip gradient to")
-    parser.add_argument("--max-epochs", type=int, default=20
+    parser.add_argument("--max-epochs", type=int, default=40
                         ,
                         help="maximum epochs")
     parser.add_argument("--model", type=int, default=0)

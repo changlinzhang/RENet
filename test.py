@@ -10,21 +10,30 @@ import pickle
 def test(args):
     # load data
     num_nodes, num_rels = utils.get_total_number('./data/' + args.dataset, 'stat.txt')
-    test_data, ~ = utils.load_quadruples('./data/' + args.dataset, 'test.txt')
-    total_data, ~ = utils.load_quadruples('./data/' + args.dataset, 'train.txt', 'valid.txt','test.txt')
+    test_data, test_times = utils.load_quadruples('./data/' + args.dataset, 'test.txt')
+    total_data, total_times = utils.load_quadruples('./data/' + args.dataset, 'train.txt', 'valid.txt','test.txt')
     # check cuda
     use_cuda = args.gpu >= 0 and torch.cuda.is_available()
     if use_cuda:
         torch.cuda.set_device(args.gpu)
         torch.cuda.manual_seed_all(999)
 
+    setting_name = '_'.join(
+        ['dropout', str(args.dropout),
+         'em', str(args.n_hidden),
+         'lr', str(args.lr),
+         'norm', str(args.grad_norm),
+         'seq', str(args.seq_len),
+         'bs', str(args.batch_size),
+         'rnn', str(args.rnn_layers),])
+
     os.makedirs('models', exist_ok=True)
     if args.model == 0:
-        model_state_file = 'models/'+args.dataset+'attn.pth'
+        model_state_file = 'models/'+args.dataset+setting_name+'attn.pth'
     elif args.model == 1:
-        model_state_file = 'models/'+args.dataset+'mean.pth'
+        model_state_file = 'models/'+args.dataset+setting_name+'mean.pth'
     elif args.model == 2:
-        model_state_file = 'models/'+args.dataset+'gcn.pth'
+        model_state_file = 'models/'+args.dataset+setting_name+'gcn.pth'
 
     model = RENet(num_nodes,
                     args.n_hidden,
@@ -105,17 +114,36 @@ def test(args):
     print("MRR (filtered): {:.6f}".format(mrr))
     print("MR (filtered): {:.6f}".format(mr))
 
+    writeList = [model_state_file,
+        'testSet', '%.6f' % hits[0], '%.6f' % hits[1], '%.6f' % hits[2], '%.6f' % mr, '%.6f' % mrr]
+
+    # Write the result into file
+    os.makedirs('./result/', exist_ok=True)
+    with open(os.path.join('./result/', args.dataset + '.txt'), 'a') as fw:
+        fw.write('\t'.join(writeList) + '\n')
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='RENet')
-    parser.add_argument("-d", "--dataset", type=str, default='ICEWS18',
-            help="dataset to use")
-    parser.add_argument("--gpu", type=int, default=-1,
-            help="gpu")
-    parser.add_argument("--model", type=int, default=0)
+    parser.add_argument("--dropout", type=float, default=0.5,
+            help="dropout probability")
     parser.add_argument("--n-hidden", type=int, default=200,
             help="number of hidden units")
+    parser.add_argument("--gpu", type=int, default=-1,
+            help="gpu")
+    parser.add_argument("--lr", type=float, default=1e-3,
+            help="learning rate")
+    parser.add_argument("-d", "--dataset", type=str, default='ICEWS18',
+            help="dataset to use")
+    parser.add_argument("--grad-norm", type=float, default=1.0,
+    help="norm to clip gradient to")
+    parser.add_argument("--max-epochs", type=int, default=20
+                        ,
+                        help="maximum epochs")
+    parser.add_argument("--model", type=int, default=0)
     parser.add_argument("--seq-len", type=int, default=10)
+    parser.add_argument("--batch-size", type=int, default=1024)
+    parser.add_argument("--rnn-layers", type=int, default=1)
 
     args = parser.parse_args()
     test(args)
